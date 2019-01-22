@@ -5,9 +5,9 @@ account: jhubiostatistics
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 454337
-bundleId: 1592716
+bundleId: 1830059
 url: https://jhubiostatistics.shinyapps.io/validate_curriculum/
-when: 1537312289.37667
+when: 1548190396.23871
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: curriculum.xlsx|scm.xlsx|Transcript.pdf
+ignoredFiles: .Rbuildignore|all_jhsph_courses.html|curriculum.xlsx|fall_jhsph_courses.html|read_courses.R|README.md|README.Rmd|report.html|report.Rmd|Transcript_leroux.pdf|Transcript.pdf
