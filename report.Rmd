@@ -1,0 +1,184 @@
+---
+title: "Untitled"
+author: "John Muschelli"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(transcriptr)
+library(dplyr)
+library(tidyr)
+# 1.  Did you complete all core required curriulum (up to what you should have)
+# 2.  6 credits outside department at JHSPH
+# 3.  6 credits outside department
+# 4.  Did you take the 800 level courses you needed?
+```
+
+
+```{r readin, include = FALSE}
+scm = read.csv("scm.csv", header = TRUE, as.is = TRUE)
+scm = scm %>% 
+  filter(!course_number %in% "")
+scm$year = scm$term = NULL
+scm$program = "SCM: Biostatistics"
+
+phd = read.csv("phd.csv", header = TRUE, as.is = TRUE)
+phd = phd %>% 
+  filter(!course_number %in% "")
+phd$year = phd$term = NULL
+phd$program = "PHD: Biostatistics"
+
+curr = rbind(scm, phd)
+
+cn_to_columns = function(df) {
+  df = df %>%
+    separate(course_number, sep = "[.]", remove = FALSE,
+             into = c("school", "department",
+                      "sub_course_number"))
+  df = df %>%
+    mutate(public_health = grepl("PH", course_number))
+  df = df %>%
+    mutate(ss = as.numeric(sub_course_number),
+           is_800 = ss >= 800 & ss < 900) %>%
+    select(-ss)
+  df
+}
+rm_cn_columns = function(df) {
+  df = df %>% 
+    select(-school,
+           -department,
+           -sub_course_number, 
+           -public_health, 
+           -is_800)  
+  df
+}
+pass_grades = c("A", "B", "C", "P")
+
+requirements = data_frame(
+  inside_department = c(FALSE, FALSE),
+  public_health = c(FALSE, TRUE),
+  min_credits = c(6, 6),
+  is_800 = FALSE
+)
+```
+
+```{r data}
+paths = c("Transcript.pdf", "Transcript_leroux.pdf")
+```
+
+
+```{r}
+df = transcriptr::combine_transcript(paths)
+df = cn_to_columns(df)
+
+sdf = df %>% 
+  group_by(student_id, program, department, 
+           public_health, is_800) %>% 
+  summarize(credits = sum(pass_credits)) %>% 
+  ungroup()
+uprog = unique(df$program)
+xcurr = curr %>% 
+  filter(program %in% uprog)
+
+split_df = split(df, df$student_id)
+split_df = lapply(split_df, function(x) {
+  x = rm_cn_columns(x)
+
+  df = full_join(xcurr, x, 
+                 by = c("course_number", "program"))
+  one_unique = function(x) {
+    x = unique(na.omit(x))
+    stopifnot(length(x) == 1)
+    x
+  }
+  df$student_id = one_unique(df$student_id)
+  df$file = one_unique(df$file)
+  df = df %>% 
+    rename(course_title = course_title.x)
+  
+  not_req = is.na(df$status)
+  df$status[not_req] = "elective"
+  df = df %>% 
+    mutate(course_title = 
+             ifelse(status %in% "elective" | is.na(course_title),
+                    course_title.y,
+                    course_title),
+           pass = ifelse(pass == FALSE | is.na(pass),
+                         FALSE,
+                         pass)) %>% 
+    select(-course_title.y)
+  no_title = is.na(df$course_title)
+  stopifnot(!any(no_title))
+  
+  df$taken = !is.na(df$year) & !(df$grade %in% "X")
+  df
+})
+df = bind_rows(split_df)
+ss = sapply(strsplit(df$year, split = "-"), 
+            dplyr::first)
+ss = as.numeric(ss)
+df$year = ss
+df = df %>% 
+  arrange(student_id, program, year, term)
+df = df %>% 
+  cn_to_columns()
+
+# stop("me")
+```
+
+## All Core Courses Passed
+
+1.  Did you complete all core required curriulum (up to what you should have)
+
+Here we present the data for each student 
+```{r}
+req = df %>% 
+  filter(status %in% "required") %>% 
+  filter( !pass) %>% 
+  select(student_id, program, year, term, course_number, course_title, grade)
+ss = split(req, f = list(req$program, req$student_id))
+htmltools::tagList(
+  lapply(ss, function(x) {
+    sid = unique(x$student_id)
+    x = x %>% 
+      select(-student_id)
+    list(
+      htmltools::h3(sid),
+                    DT::datatable(x)
+      )
+  })
+  )
+```
+
+```{r}
+all_core = df %>% 
+  group_by(student_id, program, status) %>% 
+  summarize(credits = sum(pass_credits),
+            num_passed = sum(pass),
+            all_passed = all(pass)) %>% 
+  ungroup()
+```
+
+
+```{r}
+most_dep = sdf %>% 
+  group_by(student_id, program) %>% 
+  filter(credits == max(credits)) %>% 
+  select(department) %>% 
+  rename(program_department = department)
+sdf = left_join(sdf, most_dep)
+
+sdf = sdf %>% 
+  mutate(
+    inside_department = department %in% program_department) %>% 
+  group_by(student_id, program, 
+           inside_department, public_health, is_800) %>% 
+  summarize(credits = sum(credits))
+sdf = left_join(sdf, requirements)
+sdf = sdf %>% 
+  filter(!is_800) 
+sdf %>% 
+  mutate(met_requirement = credits >= min_credits) %>% 
+  select(-min_credits)
+```

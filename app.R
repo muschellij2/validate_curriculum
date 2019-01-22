@@ -62,7 +62,12 @@ ui <- fluidPage(
                          dataTableOutput("summary"),
                          dataTableOutput("full_ph_summary")
                 )
-            ) 
+            ),
+            helpText(HTML(
+              paste0('The source code of this app is ',
+                     '<a href="https://github.com/muschellij2/validate_curriculum">', 
+                     'on Github</a>.')
+            ))            
         )
     )
 )
